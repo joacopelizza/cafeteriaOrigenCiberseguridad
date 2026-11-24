@@ -1,3 +1,17 @@
+-- =============================================================================
+-- Usuario de aplicación con mínimos privilegios (la CORRECCIÓN ya está
+-- prepared en este archivo; el proyecto arranca usándolo).
+--
+-- La app se conecta hoy como superusuario `postgres` (ver docker-compose.yml).
+-- La corrección es cambiar DB_USER/DB_PASSWORD por este usuario:
+--
+--     DB_USER: origen_app
+--     DB_PASSWORD: valor configurado en .env
+--
+-- Este usuario NO es superusuario: no puede crear bases, usuarios ni tocar
+-- el esquema. Sólo puede leer y escribir datos del catálogo.
+-- =============================================================================
+
 \getenv app_password DB_PASSWORD
 
 SELECT 'CREATE ROLE origen_app LOGIN'
