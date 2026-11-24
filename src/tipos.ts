@@ -11,7 +11,9 @@
  * eso se comprueba con código en el servidor, no con anotaciones.
  */
 
+
 /** PostgreSQL devuelve las columnas NUMERIC como texto ("2500.00"). */
+
 export type Numerico = number | string;
 
 export type Rol = 'admin' | 'barista' | 'mozo' | 'cliente';
@@ -42,8 +44,8 @@ export interface Producto extends DatosProducto {
 export interface ProductoConPrecio extends Producto {
   precio: number;
 }
-
 /** Fila de la tabla `usuarios`. */
+
 export interface Usuario {
   id: number;
   username: string;
@@ -59,10 +61,9 @@ export type UsuarioSesion = Pick<Usuario, 'id' | 'username' | 'rol' | 'nombre'>;
 export interface Sesion {
   usuario: UsuarioSesion;
   creadaEn: number;
-  expiraEn: number | null;
+  expiraEn: number;
 }
 
-/** Fila de la tabla `pedidos`. */
 export interface Pedido {
   id: number;
   mesa: string | null;
