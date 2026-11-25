@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="es-AR">
 <head>
+  <!-- ============================================================
+       CÓDIGO ORIGINAL DEL REPOSITORIO DEL TP
+       Funcionalidad: metadatos y recursos estáticos del panel
+       ============================================================ -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel — Cafetería Origen</title>
@@ -9,6 +13,10 @@
 </head>
 <body class="admin-body">
 
+  <!-- ============================================================
+       CÓDIGO ORIGINAL DEL REPOSITORIO DEL TP
+       Funcionalidad: encabezado e identidad del panel
+       ============================================================ -->
 <header class="site-header admin-header">
   <div class="wrap header-inner">
     <a class="brand" href="/">
@@ -25,10 +33,10 @@
 <main class="admin-main">
   <div class="wrap">
 
-    <!-- ============ LOGIN ============ -->
     <section class="card login-card" id="vista-login">
       <h1>Iniciar sesión</h1>
       <p class="muted">Acceso al panel de la cafetería.</p>
+
       <form id="form-login" novalidate>
         <label class="field">
           <span>Usuario</span>
@@ -41,13 +49,9 @@
         <button type="submit" class="btn btn-primary btn-block">Entrar</button>
         <p class="form-feedback" id="login-feedback"></p>
       </form>
-      <p class="muted small">
-        <strong>Usuarios de prueba:</strong> admin/admin ·
-        valentina/origen2024 · barista/cafe123 · mozo/mozo123 · cliente/cliente
-      </p>
+      <p class="muted small">Las contraseñas iniciales se configuran en el archivo local <code>.env</code>.</p>
     </section>
 
-    <!-- ============ PANEL ============ -->
     <section id="vista-panel" hidden>
 
       <div class="panel-head">
@@ -67,7 +71,6 @@
         <button class="tab" data-vista="herramientas">Herramientas</button>
       </nav>
 
-      <!-- ---------- RESUMEN ---------- -->
       <div class="tab-panel is-active" data-panel="resumen">
         <div class="kpi-grid" id="kpis"></div>
         <div class="card">
@@ -76,7 +79,6 @@
         </div>
       </div>
 
-      <!-- ---------- PEDIDOS ---------- -->
       <div class="tab-panel" data-panel="pedidos">
         <div class="card">
           <h3>Pedidos de todas las mesas</h3>
@@ -84,7 +86,6 @@
         </div>
       </div>
 
-      <!-- ---------- PRODUCTOS ---------- -->
       <div class="tab-panel" data-panel="productos">
         <div class="two-col">
           <div class="card">
@@ -145,7 +146,6 @@
         </div>
       </div>
 
-      <!-- ---------- REPORTES ---------- -->
       <div class="tab-panel" data-panel="reportes">
         <div class="kpi-grid" id="kpis-reportes"></div>
         <div class="card">
@@ -162,7 +162,6 @@
         </div>
       </div>
 
-      <!-- ---------- USUARIOS ---------- -->
       <div class="tab-panel" data-panel="usuarios">
         <div class="card">
           <h3>Usuarios del sistema</h3>
@@ -178,7 +177,6 @@
         </div>
       </div>
 
-      <!-- ---------- HERRAMIENTAS ---------- -->
       <div class="tab-panel" data-panel="herramientas">
         <div class="two-col">
           <div class="card">
