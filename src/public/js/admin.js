@@ -1,12 +1,10 @@
-/* =============================================================================
-   Cafetería Origen — lógica del panel de administración
-   ============================================================================= */
 (function () {
   'use strict';
 
   var API = '/api';
   var usuario = null;
   var productosCache = {};
+  var tokenCsrfPromise = null;
 
   function $(sel) { return document.querySelector(sel); }
   function $$(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
@@ -16,22 +14,50 @@
   }
 
   function raw(valor) {
-    // FALLA: no escapa nada. Usar escaparHtml() / textContent.
-    return String(valor == null ? '' : valor);
+    return String(valor == null ? '' : valor).replace(/[&<>"']/g, function (caracter) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      }[caracter];
+    });
   }
 
-  function escaparHtml(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto == null ? '' : String(texto);
-    return div.innerHTML;
+  function renderHtml(elemento, html) {
+    var rango = document.createRange();
+    rango.selectNodeContents(elemento);
+    elemento.replaceChildren(rango.createContextualFragment(html));
   }
 
   function api(url, opciones) {
-    return fetch(API + url, opciones).then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (data) {
-        return { ok: res.ok, status: res.status, data: data };
+    var opcionesSolicitud = opciones || {};
+    var metodo = (opcionesSolicitud.method || 'GET').toUpperCase();
+    var escritura = ['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(metodo) !== -1;
+    var token = escritura ? obtenerTokenCsrf() : Promise.resolve('');
+
+    return token.then(function (valorToken) {
+      if (valorToken) {
+        opcionesSolicitud = Object.assign({}, opcionesSolicitud, {
+          headers: Object.assign({}, opcionesSolicitud.headers || {}, { 'X-CSRF-Token': valorToken }),
+        });
+      }
+      return fetch(API + url, opcionesSolicitud).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
       });
     });
+  }
+
+  function obtenerTokenCsrf() {
+    if (!tokenCsrfPromise) {
+      tokenCsrfPromise = fetch(API + '/csrf-token')
+        .then(function (res) { return res.json(); })
+        .then(function (data) { return data.token || ''; });
+    }
+    return tokenCsrfPromise;
   }
 
   function postJSON(url, cuerpo) {
@@ -60,10 +86,9 @@
 
   function feedback(el, mensaje, ok) {
     el.className = 'form-feedback ' + (ok ? 'is-ok' : 'is-error');
-    el.innerHTML = mensaje;
+    el.textContent = mensaje;
   }
 
-  /* ------------------------------------------------------------------ login */
   function iniciarSesion(evento) {
     evento.preventDefault();
     var caja = $('#login-feedback');
@@ -74,8 +99,6 @@
       password: $('#login-password').value,
     }).then(function (resp) {
       if (!resp.ok) {
-        // FALLA (XSS reflejado): el mensaje del servidor (que incluye el
-        // usuario enviado) se pinta con innerHTML.
         feedback(caja, 'No pudimos iniciar sesión: ' + (resp.data.error || 'error desconocido'), false);
         return;
       }
@@ -89,15 +112,21 @@
       usuario = null;
       $('#vista-login').hidden = false;
       $('#vista-panel').hidden = true;
-      $('#admin-user').innerHTML = '';
+      $('#admin-user').replaceChildren();
     });
   }
 
   function mostrarPanel() {
+    if (!usuario || usuario.rol !== 'admin') {
+      $('#vista-login').hidden = false;
+      $('#vista-panel').hidden = true;
+      feedback($('#login-feedback'), 'Tu cuenta no tiene permisos para el panel.', false);
+      return;
+    }
+
     $('#vista-login').hidden = true;
     $('#vista-panel').hidden = false;
-    $('#admin-user').innerHTML =
-      'Sesión de <strong>' + raw(usuario.nombre) + '</strong> · rol: <strong>' + raw(usuario.rol) + '</strong>';
+    $( '#admin-user' ).textContent = 'Sesi\u00f3n de ' + usuario.nombre + ' \u00b7 rol: ' + usuario.rol;
     $('#panel-bienvenida').textContent = 'Hola, ' + usuario.nombre;
     cargarTodo();
   }
@@ -110,7 +139,6 @@
     cargarUsuarios();
   }
 
-  /* ---------------------------------------------------------------- resumen */
   function cargarResumen() {
     api('/reportes/facturacion').then(function (f) {
       api('/reportes/mas-vendido').then(function (m) {
@@ -131,16 +159,15 @@
             },
           ];
 
-          $('#kpis').innerHTML = kpis.map(function (k) {
+          renderHtml($('#kpis'), kpis.map(function (k) {
             return '<div class="kpi"><div class="kpi-label">' + raw(k.label) + '</div>' +
               '<div class="kpi-value">' + raw(k.value) + '</div></div>';
-          }).join('');
+          }).join(''));
         });
       });
     });
   }
 
-  /* --------------------------------------------------------------- pedidos */
   function tablaPedidos(filas, conAcciones) {
     if (!filas || filas.length === 0) return '<p class="empty">No hay pedidos.</p>';
 
@@ -171,8 +198,8 @@
   function cargarPedidos() {
     api('/pedidos').then(function (resp) {
       var pedidos = resp.data.pedidos || [];
-      $('#tabla-pedidos').innerHTML = tablaPedidos(pedidos, true);
-      $('#tabla-ultimos').innerHTML = tablaPedidos(pedidos.slice(0, 5), false);
+      renderHtml($('#tabla-pedidos'), tablaPedidos(pedidos, true));
+      renderHtml($('#tabla-ultimos'), tablaPedidos(pedidos.slice(0, 5), false));
     });
   }
 
@@ -188,7 +215,6 @@
     });
   }
 
-  /* ------------------------------------------------------------- productos */
   function cargarProductos() {
     api('/productos').then(function (resp) {
       var productos = resp.data.productos || [];
@@ -208,7 +234,7 @@
           '</tr>';
       });
 
-      $('#tabla-productos').innerHTML = html + '</tbody>';
+      renderHtml($('#tabla-productos'), html + '</tbody>');
     });
   }
 
@@ -259,7 +285,6 @@
     $('#producto-id').value = '';
   }
 
-  /* ---------------------------------------------------------------- upload */
   function subirArchivo(evento) {
     evento.preventDefault();
     var caja = $('#upload-feedback');
@@ -289,7 +314,6 @@
     lector.readAsDataURL(archivo);
   }
 
-  /* -------------------------------------------------------------- reportes */
   function cargarReportes() {
     api('/reportes/facturacion').then(function (f) {
       api('/reportes/ticket-promedio').then(function (t) {
@@ -301,10 +325,10 @@
             { label: 'Ticket promedio', value: money(t.data.promedio) },
             { label: 'Más vendido', value: mas ? raw(mas.nombre) + ' (' + raw(mas.unidades) + ')' : '—' },
           ];
-          $('#kpis-reportes').innerHTML = kpis.map(function (k) {
+          renderHtml($('#kpis-reportes'), kpis.map(function (k) {
             return '<div class="kpi"><div class="kpi-label">' + raw(k.label) + '</div>' +
               '<div class="kpi-value">' + raw(k.value) + '</div></div>';
-          }).join('');
+          }).join(''));
         });
       });
     });
@@ -317,7 +341,7 @@
     api('/reportes/ventas-por-variedad?variedad=' + encodeURIComponent(variedad)).then(function (resp) {
       if (!resp.ok) {
         feedback(caja, 'Error: ' + (resp.data.error || 'desconocido'), false);
-        $('#tabla-ventas').innerHTML = '';
+        $('#tabla-ventas').replaceChildren();
         return;
       }
       var ventas = resp.data.ventas || [];
@@ -327,12 +351,11 @@
         html += '<tr><td>' + raw(v.variedad) + '</td><td>' + raw(v.nombre) + '</td>' +
           '<td class="num">' + raw(v.unidades) + '</td><td class="num">' + money(v.total) + '</td></tr>';
       });
-      $('#tabla-ventas').innerHTML = html + '</tbody>';
+      renderHtml($('#tabla-ventas'), html + '</tbody>');
       feedback(caja, 'Consulta realizada.', true);
     });
   }
 
-  /* -------------------------------------------------------------- usuarios */
   function cargarUsuarios() {
     api('/admin/usuarios').then(function (resp) {
       var usuarios = resp.data.usuarios || [];
@@ -350,7 +373,7 @@
             '</select></td>' +
           '</tr>';
       });
-      $('#tabla-usuarios').innerHTML = html + '</tbody>';
+      renderHtml($('#tabla-usuarios'), html + '</tbody>');
     });
   }
 
@@ -378,7 +401,6 @@
     });
   }
 
-  /* ----------------------------------------------------------- herramientas */
   function probarConexion(evento) {
     evento.preventDefault();
     var salida = $('#salida-conexion');
@@ -390,7 +412,7 @@
         return;
       }
       salida.textContent =
-        '$ ' + resp.data.comando + '\n\n' +
+        '$ ping ' + $('#conexion-host').value + '\n\n' +
         (resp.data.salida || '') +
         (resp.data.error ? '\n[stderr]\n' + resp.data.error : '');
     });
@@ -404,7 +426,6 @@
     });
   }
 
-  /* ------------------------------------------------------------------ tabs */
   function activarTab(evento) {
     var tab = evento.target.closest('.tab');
     if (!tab) return;
@@ -416,15 +437,12 @@
     });
   }
 
-  /* ------------------------------------------------------------------ init */
   function init() {
-    // FALLA (XSS de DOM): se lee un parámetro de la URL y se inyecta con
-    // innerHTML. Al abrir admin.html?vista=<script>...</script> se ejecuta
-    // código en el navegador del admin.
+ 
     var params = new URLSearchParams(window.location.search);
     var objetivo = params.get('vista');
     if (objetivo) {
-      $('#panel-bienvenida').innerHTML = 'Panel ' + objetivo;
+      $('#panel-bienvenida').textContent = 'Panel ' + objetivo;
     }
 
     $('#form-login').addEventListener('submit', iniciarSesion);
@@ -442,7 +460,6 @@
     $('#form-conexion').addEventListener('submit', probarConexion);
     $('#btn-diagnostico').addEventListener('click', verDiagnostico);
 
-    // ¿Ya hay sesión?
     api('/auth/yo').then(function (resp) {
       if (resp.ok) {
         usuario = resp.data.usuario;
@@ -457,3 +474,4 @@
     init();
   }
 })();
+
