@@ -1,9 +1,11 @@
 import express from 'express';
 import * as reportes from '../services/reportes.service';
+import { requiereSesion, requiereRol } from '../middleware/auth';
 
 const router = express.Router();
 
-/** GET /api/reportes/facturacion — cuánto se facturó. */
+router.use(requiereSesion, requiereRol('admin'));
+
 router.get('/facturacion', async (req, res, next) => {
   try {
     res.json(await reportes.facturacion());
@@ -12,7 +14,7 @@ router.get('/facturacion', async (req, res, next) => {
   }
 });
 
-/** GET /api/reportes/cantidad-vendida — unidades por tipo de producto. */
+
 router.get('/cantidad-vendida', async (req, res, next) => {
   try {
     res.json({ cantidadVendida: await reportes.cantidadVendidaPorTipo() });
@@ -21,7 +23,7 @@ router.get('/cantidad-vendida', async (req, res, next) => {
   }
 });
 
-/** GET /api/reportes/mas-vendido — producto más vendido. */
+
 router.get('/mas-vendido', async (req, res, next) => {
   try {
     res.json({ producto: await reportes.masVendido() });
@@ -30,7 +32,7 @@ router.get('/mas-vendido', async (req, res, next) => {
   }
 });
 
-/** GET /api/reportes/ticket-promedio */
+
 router.get('/ticket-promedio', async (req, res, next) => {
   try {
     res.json(await reportes.ticketPromedio());
@@ -39,12 +41,7 @@ router.get('/ticket-promedio', async (req, res, next) => {
   }
 });
 
-/**
- * GET /api/reportes/ventas-por-variedad?variedad=
- *
- * FALLA — Inyección SQL: el origen se concatena en la consulta.
- * No se exige autenticación ni rol para ver la facturación.
- */
+
 router.get('/ventas-por-variedad', async (req, res, next) => {
   try {
     const variedad = (req.query.variedad as string | undefined) || '';
