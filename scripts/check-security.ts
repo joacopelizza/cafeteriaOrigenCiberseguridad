@@ -25,7 +25,6 @@ import path from 'path';
 
 const RAIZ = path.join(__dirname, '..');
 
-/** Un ítem de la planilla de seguridad. */
 interface Control {
   id: string;
   categoria: string;
@@ -52,8 +51,6 @@ interface Resultado {
   resumen: string;
   ejemplos: string[];
 }
-
-/* ============================== utilidades ============================== */
 
 /**
  * Enmascara los comentarios (los reemplaza por espacios) sin alterar la
@@ -100,12 +97,8 @@ function buscarEnArchivo(rutaAbsoluta: string, patron: RegExp): Hallazgo | null 
   };
 }
 
-/* ============================== controles ============================== */
-
 const CONTROLES: Control[] = [
-  // -------------------------------------------------------------------------
-  // 1. INYECCIÓN SQL
-  // -------------------------------------------------------------------------
+
   {
     id: 'SQLI-01',
     categoria: 'Inyección SQL',
@@ -165,9 +158,6 @@ const CONTROLES: Control[] = [
     critico: true,
   },
 
-  // -------------------------------------------------------------------------
-  // 2. CROSS-SITE SCRIPTING (XSS)
-  // -------------------------------------------------------------------------
   {
     id: 'XSS-01',
     categoria: 'XSS',
@@ -214,9 +204,6 @@ const CONTROLES: Control[] = [
     critico: false,
   },
 
-  // -------------------------------------------------------------------------
-  // 3. CSRF
-  // -------------------------------------------------------------------------
   {
     id: 'CSRF-01',
     categoria: 'CSRF',
@@ -260,9 +247,6 @@ const CONTROLES: Control[] = [
     critico: true,
   },
 
-  // -------------------------------------------------------------------------
-  // 4. VALIDACIÓN DE ENTRADA
-  // -------------------------------------------------------------------------
   {
     id: 'VAL-01',
     categoria: 'Validación de entrada',
@@ -329,9 +313,6 @@ const CONTROLES: Control[] = [
     critico: true,
   },
 
-  // -------------------------------------------------------------------------
-  // 5. AUTENTICACIÓN Y GESTIÓN DE SESIONES
-  // -------------------------------------------------------------------------
   {
     id: 'AUTH-01',
     categoria: 'Autenticación y sesiones',
@@ -492,9 +473,6 @@ const CONTROLES: Control[] = [
     critico: false,
   },
 
-  // -------------------------------------------------------------------------
-  // 6. INYECCIÓN DE COMANDOS
-  // -------------------------------------------------------------------------
   {
     id: 'CMD-01',
     categoria: 'Inyección de comandos',
@@ -528,9 +506,6 @@ const CONTROLES: Control[] = [
     critico: true,
   },
 
-  // -------------------------------------------------------------------------
-  // 7. AJUSTES DE CONFIGURACIÓN Y EXPOSICIÓN DE INFORMACIÓN
-  // -------------------------------------------------------------------------
   {
     id: 'CFG-01',
     categoria: 'Configuración',
@@ -585,8 +560,6 @@ const CONTROLES: Control[] = [
   },
 ];
 
-/* ============================== evaluación ============================== */
-
 function evaluar(control: Control): Resultado {
   const archivos = control.archivos.flatMap(listarArchivos);
   const hallazgos: Hallazgo[] = [];
@@ -628,8 +601,6 @@ function evaluar(control: Control): Resultado {
     ejemplos: [],
   };
 }
-
-/* ============================== salida ============================== */
 
 function color(texto: string, codigo: string): string {
   return process.stdout.isTTY ? `\x1b[${codigo}m${texto}\x1b[0m` : texto;
