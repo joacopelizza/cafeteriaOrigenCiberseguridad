@@ -33,13 +33,16 @@ import fs from 'fs';
 import path from 'path';
 
 import * as db from '../src/db';
+import config from '../src/config';
 import {
   app,
   agente,
   prepararBase,
   login,
+  postConToken,
   productoPorNombre,
   crearUsuarioDePrueba,
+  borrarUsuarioDePrueba,
   cookieCruda,
   MARCA_PRUEBA,
   limpiarDatosDePrueba,
@@ -136,7 +139,12 @@ function valorSid(cookie: string): string | null {
  * se perdería y los tests medirían la cosa equivocada.
  */
 async function autenticar(username: string, password: string) {
-  const res = await request(app).post('/api/auth/login').send({ username, password });
+  const csrf = await request(app).get('/api/csrf-token');
+  const res = await request(app)
+    .post('/api/auth/login')
+    .set('Cookie', cookiesDe(csrf))
+    .set('X-CSRF-Token', csrf.body.token)
+    .send({ username, password });
   return { res, cookies: cookiesDe(res), sid: valorSid(cookieCruda(res)) };
 }
 
@@ -157,11 +165,19 @@ function cuerpo(res: request.Response): string {
   return JSON.stringify(res.body || {});
 }
 
-/* ============================ 1. SQL INJECTION ============================ */
-
 describe('Seguridad · Inyección SQL', () => {
+  const usernamePedidos = 'sec_sql_pedidos';
+  const passwordPedidos = 'Sec_SQL_pedidos_2026!';
+  const personalPedidos = agente();
+
   before(async () => {
     await prepararBase();
+    await crearUsuarioDePrueba(usernamePedidos, passwordPedidos, 'barista');
+    await login(personalPedidos, usernamePedidos, passwordPedidos);
+  });
+
+  after(async () => {
+    await borrarUsuarioDePrueba(usernamePedidos);
   });
 
   test('la búsqueda del catálogo NO se puede ampliar con SQL', async () => {
@@ -194,7 +210,7 @@ describe('Seguridad · Inyección SQL', () => {
   });
 
   test('el filtro por mesa NO se puede ampliar con SQL', async () => {
-    const res = await agente().get(
+    const res = await personalPedidos.get(
       `/api/pedidos?mesa=${encodeURIComponent("' OR '1'='1")}`
     );
     const pedidos: Pedido[] = res.body.pedidos || [];
@@ -241,8 +257,6 @@ describe('Seguridad · Inyección SQL', () => {
     );
   });
 });
-
-/* ================================ 2. XSS ================================ */
 
 describe('Seguridad · Cross-Site Scripting', () => {
   before(async () => {
@@ -292,8 +306,6 @@ describe('Seguridad · Cross-Site Scripting', () => {
   });
 });
 
-/* =============================== 3. CSRF =============================== */
-
 describe('Seguridad · CSRF', () => {
   before(async () => {
     await prepararBase();
@@ -340,8 +352,6 @@ describe('Seguridad · CSRF', () => {
   });
 });
 
-/* ========================== 4. VALIDACIÓN ========================== */
-
 describe('Seguridad · Validación de entrada', () => {
   before(async () => {
     await prepararBase();
@@ -356,12 +366,13 @@ describe('Seguridad · Validación de entrada', () => {
 
   test('no se aceptan cantidades negativas', async () => {
     const producto = await productoPorNombre('Espresso Pocillo Colombia');
-    const res = await agente().post('/api/pedidos').send({
+    const res = await postConToken(agente(), '/api/pedidos', {
       mesa: '1',
       cliente: MARCA_PRUEBA,
       items: [{ productoId: producto.id, cantidad: -5 }],
     });
 
+    assert.equal(Number(res.status), 400, 'La entrada inválida no llegó a ser rechazada por la validación del servicio.');
     if (res.status === 201) {
       assert.ok(
         Number(res.body.total) >= 0,
@@ -383,12 +394,13 @@ describe('Seguridad · Validación de entrada', () => {
 
   test('no se aceptan cantidades no numéricas', async () => {
     const producto = await productoPorNombre('Espresso Pocillo Colombia');
-    const res = await agente().post('/api/pedidos').send({
+    const res = await postConToken(agente(), '/api/pedidos', {
       mesa: '1',
       cliente: MARCA_PRUEBA,
       items: [{ productoId: producto.id, cantidad: 'muchos' }],
     });
 
+    assert.equal(Number(res.status), 400, 'La entrada inválida no llegó a ser rechazada por la validación del servicio.');
     if (res.status === 201) {
       assert.ok(
         Number.isFinite(Number(res.body.total)),
@@ -403,12 +415,13 @@ describe('Seguridad · Validación de entrada', () => {
   });
 
   test('no se aceptan reseñas sin límite de longitud', async () => {
-    const res = await agente().post('/api/comentarios').send({
+    const res = await postConToken(agente(), '/api/comentarios', {
       autor: MARCA_PRUEBA,
       texto: 'A'.repeat(5000),
       calificacion: 5,
     });
 
+    assert.equal(Number(res.status), 400, 'La entrada inválida no llegó a ser rechazada por la validación del servicio.');
     if (res.status === 201) {
       assert.ok(
         (res.body.texto || '').length <= 1000,
@@ -420,6 +433,22 @@ describe('Seguridad · Validación de entrada', () => {
         `La API respondió ${res.status} en vez de rechazar la reseña.`
       );
     }
+  });
+
+  test('una reseña válida se puede crear y recuperar', async () => {
+    const texto = 'El café estuvo muy bueno y el servicio fue amable.';
+    const creada = await postConToken(agente(), '/api/comentarios', {
+      autor: MARCA_PRUEBA,
+      texto,
+      calificacion: 5,
+    });
+
+    assert.equal(creada.status, 201);
+    assert.equal(creada.body.texto, texto);
+
+    const listado = await agente().get('/api/comentarios');
+    assert.equal(listado.status, 200);
+    assert.ok(listado.body.comentarios.some((comentario: { texto: string }) => comentario.texto === texto));
   });
 
   test('no se aceptan archivos ejecutables ni se escribe fuera de uploads', async () => {
@@ -472,9 +501,35 @@ describe('Seguridad · Validación de entrada', () => {
       );
     }
   });
-});
 
-/* ====================== 5. AUTENTICACIÓN Y SESIONES ====================== */
+  test('una imagen PNG válida se puede subir y queda dentro de uploads', async () => {
+    await crearUsuarioDePrueba('sec_upload_valido', 'Sec_Clave_2024!', 'admin');
+    const { cookies } = await autenticar('sec_upload_valido', 'Sec_Clave_2024!');
+    const info = await obtenerTokenCsrf(conSesion(cookies));
+    assert.ok(info, 'No se pudo obtener el token CSRF para la subida legítima.');
+    const http = conSesion(unirCookies(cookies, info.cookies));
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/GxkAAAAASUVORK5CYII=';
+
+    const res = await http
+      .post('/api/admin/subir-archivo', {
+        nombre: 'imagen-prueba.png',
+        contenidoBase64: png,
+      })
+      .set('X-CSRF-Token', info.token);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.mime, 'image/png');
+    assert.ok(/^\/uploads\/[0-9a-f-]+\.png$/i.test(res.body.url));
+
+    const ruta = path.join(config.uploadsDir, path.basename(res.body.url));
+    try {
+      assert.ok(fs.existsSync(ruta), 'El archivo reportado no quedó en la carpeta uploads.');
+      assert.equal(fs.statSync(ruta).size, Buffer.from(png, 'base64').length);
+    } finally {
+      if (fs.existsSync(ruta)) fs.unlinkSync(ruta);
+    }
+  });
+});
 
 describe('Seguridad · Autenticación y sesiones', () => {
   before(async () => {
@@ -504,9 +559,7 @@ describe('Seguridad · Autenticación y sesiones', () => {
 
   test('la cookie de sesión lleva HttpOnly, Secure y SameSite', async () => {
     await crearUsuarioDePrueba('sec_cookie', 'Sec_Clave_2024!', 'barista');
-    const res = await request(app)
-      .post('/api/auth/login')
-      .send({ username: 'sec_cookie', password: 'Sec_Clave_2024!' });
+    const { res } = await autenticar('sec_cookie', 'Sec_Clave_2024!');
 
     const cookie = cookieCruda(res);
     assert.ok(/HttpOnly/i.test(cookie), `La cookie de sesión no tiene HttpOnly: ${cookie}`);
@@ -534,9 +587,7 @@ describe('Seguridad · Autenticación y sesiones', () => {
 
     const ids = [];
     for (let i = 0; i < 3; i++) {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({ username: 'sec_sid', password: 'Sec_Clave_2024!' });
+      const { res } = await autenticar('sec_sid', 'Sec_Clave_2024!');
       ids.push(valorSid(cookieCruda(res)));
     }
 
@@ -617,8 +668,6 @@ describe('Seguridad · Autenticación y sesiones', () => {
   });
 });
 
-/* ====================== 6. INYECCIÓN DE COMANDOS ====================== */
-
 describe('Seguridad · Inyección de comandos', () => {
   before(async () => {
     await prepararBase();
@@ -664,8 +713,6 @@ describe('Seguridad · Inyección de comandos', () => {
     );
   });
 });
-
-/* =================== 7. CONFIGURACIÓN Y EXPOSICIÓN =================== */
 
 describe('Seguridad · Configuración y exposición de información', () => {
   before(async () => {
