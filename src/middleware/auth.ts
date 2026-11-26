@@ -6,13 +6,10 @@ import type { Rol } from '../tipos';
 /**
  * Middlewares de autenticación y autorización.
  *
- * `requiereRol` está IMPLEMENTADO, pero OJO: en las rutas de administración
- * (src/routes/admin.routes.ts) NO se usa. Eso es una falla de autorización:
- * cualquier usuario autenticado —incluso uno con rol "cliente"— puede
- * crear/borrar productos, cambiar contraseñas o ejecutar comandos.
+ * Las rutas de administración requieren el rol admin; las rutas de pedidos
+ * restringidas admiten admin, barista y mozo.
  */
 
-/** Exige que haya una sesión válida. */
 export function requiereSesion(req: Request, res: Response, next: NextFunction) {
   const sesion = obtenerSesion(req);
   if (!sesion) {
@@ -23,7 +20,6 @@ export function requiereSesion(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
-/** Exige que el usuario autenticado tenga uno de los roles indicados. */
 export function requiereRol(...roles: Rol[]): RequestHandler {
   return (req, res, next) => {
     if (!req.usuario) {
