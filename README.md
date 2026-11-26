@@ -30,7 +30,7 @@ secretos aleatorios de al menos 24 caracteres. La app se niega a iniciar si las
 claves iniciales siguen vacías. `.env` está excluido de Git.
 
 ```bash
-cd cafeteria-origen
+cd cafeteriaOrigenCiberseguridad
 docker compose up -d --build
 ```
 
